@@ -1,0 +1,113 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # ========================================================
+  # 1. ЛИНТЕР (Усложненная версия)
+  # ========================================================
+  lint:
+    name: 🔍 Linter (Flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Чек-аут репозитория
+        uses: actions/checkout@v4
+
+      - name: Настройка Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Установка flake8
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8
+
+      - name: Запуск проверки кода линтером
+        run: |
+          flake8 src tests
+
+  # ========================================================
+  # 2. АВТОМАТИЧЕСКИЕ ТЕСТЫ (pytest)
+  # ========================================================
+  test:
+    name: 🧪 Unit Tests (pytest)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Чек-аут репозитория
+        uses: actions/checkout@v4
+
+      - name: Настройка Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Установка зависимостей
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Запуск pytest с расчетом покрытия
+        run: |
+          pytest -v --cov=src --cov-report=term-missing tests/
+
+  # ========================================================
+  # 3. СБОРКА DOCKER ОБРАЗА (Усложненная версия)
+  # ========================================================
+  docker-build:
+    name: 🐳 Docker Build & Verify
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Чек-аут репозитория
+        uses: actions/checkout@v4
+
+      - name: Настройка Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Тестовая сборка Docker-образа
+        run: |
+          docker build -t personal-finance-calculator:latest .
+
+  # ========================================================
+  # 4. ДЕПЛОЙ НА ПРОДУКТОВЫЙ СЕРВЕР (Linux Self-Hosted Runner)
+  # Выполняется только при push в main ветку после успешных тестов
+  # ========================================================
+  deploy:
+    name: 🚀 Deploy to Production Linux VM
+    needs: [test, docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: self-hosted
+    steps:
+      - name: Чек-аут свежей версии кода на сервере
+        uses: actions/checkout@v4
+
+      - name: Запуск / Обновление контейнера через Docker Compose
+        run: |
+          echo "=== Начинаем автоматический деплой на продуктовом сервере ==="
+          
+          # Если на виртуалке установлен Docker:
+          if command -v docker &> /dev/null && command -v docker compose &> /dev/null; then
+            echo "Обновление Docker-контейнеров..."
+            docker compose down || true
+            docker compose up -d --build
+          else
+            echo "Docker не найден, выполняем запуск через systemd / python..."
+            chmod +x deploy/deploy.sh
+            ./deploy/deploy.sh
+          fi
+
+      - name: Проверка работоспособности сервиса (Health Check)
+        run: |
+          echo "Ожидание запуска приложения..."
+          sleep 5
+          curl -f http://localhost:5000/health || (echo "Health check failed!" && exit 1)
+          echo "=== Деплой успешно завершен! Приложение доступно на порту 5000 ==="
