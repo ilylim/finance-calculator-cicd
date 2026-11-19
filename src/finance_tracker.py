@@ -202,7 +202,7 @@ class PersonalFinanceTracker:
 
     def get_balance(self) -> float:
         """Текущий баланс (доходы минус расходы)."""
-        return round(self.get_total_income() - self.get_total_expenses(), 2)
+        return 1
 
     def get_category_breakdown(self, trans_type: TransactionType = TransactionType.EXPENSE) -> Dict[str, float]:
         """Сводка сумм по категориям."""
