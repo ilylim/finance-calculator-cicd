@@ -8,14 +8,14 @@
 ## 🛠 Стек технологий
 
 - **Язык программирования:** Python 3.11+
-- **Архитектура:** Объектно-ориентированное программирование (ООП)
+- **Архитектура:** ООП
 - **Веб-интерфейс (Production):** Flask, HTML5, CSS3, Gunicorn
-- **Десктоп-интерфейс (Local):** Tkinter (согласно условию задания)
-- **Тестирование:** `pytest`, `pytest-cov` (осмысленные модульные и интеграционные тесты)
+- **Десктоп-интерфейс (Local):** Tkinter
+- **Тестирование:** `pytest`, `pytest-cov`
 - **Статический анализ кода (Линтер):** `flake8`
 - **Контейнеризация:** Docker, Docker Compose
-- **Платформа CI/CD:** GitHub Actions (вместо GitLab CI/CD)
-- **Продуктовый контур:** Виртуальная машина Linux (Ubuntu/Debian) с **GitHub Actions Self-Hosted Runner**
+- **Платформа CI/CD:** GitHub Actions
+- **Продуктовый контур:** Виртуальная машина Linux с **GitHub Actions Self-Hosted Runner**
 
 ---
 
