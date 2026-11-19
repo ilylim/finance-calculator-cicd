@@ -10,7 +10,6 @@
 - **Язык программирования:** Python 3.11+
 - **Архитектура:** ООП
 - **Веб-интерфейс (Production):** Flask, HTML5, CSS3, Gunicorn
-- **Десктоп-интерфейс (Local):** Tkinter
 - **Тестирование:** `pytest`, `pytest-cov`
 - **Статический анализ кода (Линтер):** `flake8`
 - **Контейнеризация:** Docker, Docker Compose
@@ -35,7 +34,6 @@ pr3/
 │   ├── __init__.py
 │   ├── finance_tracker.py        # ООП-ядро: классы Transaction, PersonalFinanceTracker
 │   ├── app.py                    # Веб-приложение Flask (эндпоинты, health-check, API)
-│   ├── gui.py                    # Десктопный интерфейс на Tkinter
 │   ├── cli.py                    # Консольный интерфейс
 │   ├── static/
 │   │   └── style.css             # Стили для веб-интерфейса
@@ -76,10 +74,6 @@ python -m pytest -v --cov=src
   ```bash
   python -m src.app
   # Откройте в браузере: http://localhost:5000
-  ```
-- **Десктопная версия (Tkinter):**
-  ```bash
-  python -m src.gui
   ```
 - **Консольная версия (CLI):**
   ```bash
