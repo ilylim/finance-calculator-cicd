@@ -12,7 +12,7 @@ jobs:
   # 1. ЛИНТЕР (Усложненная версия)
   # ========================================================
   lint:
-    name: 🔍 Linter (Flake8)
+    name: Linter
     runs-on: ubuntu-latest
     steps:
       - name: Чек-аут репозитория
@@ -37,7 +37,7 @@ jobs:
   # 2. АВТОМАТИЧЕСКИЕ ТЕСТЫ (pytest)
   # ========================================================
   test:
-    name: 🧪 Unit Tests (pytest)
+    name: Unit Tests
     needs: lint
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +63,7 @@ jobs:
   # 3. СБОРКА DOCKER ОБРАЗА (Усложненная версия)
   # ========================================================
   docker-build:
-    name: 🐳 Docker Build & Verify
+    name: Docker Build & Verify
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -82,7 +82,7 @@ jobs:
   # Выполняется только при push в main ветку после успешных тестов
   # ========================================================
   deploy:
-    name: 🚀 Deploy to Production Linux VM
+    name: Deploy to Production Linux VM
     needs: [test, docker-build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: self-hosted
