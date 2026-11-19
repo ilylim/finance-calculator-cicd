@@ -45,6 +45,8 @@ report.xml
 
 # Runtime data
 data/*.json
+data/*.db
+data/*.sqlite3
 !data/.gitkeep
 
 # IDE and OS files

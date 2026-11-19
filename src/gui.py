@@ -8,7 +8,7 @@ from tkinter import ttk, messagebox
 from src.finance_tracker import PersonalFinanceTracker, TransactionType
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-STORAGE_PATH = os.path.join(DATA_DIR, "finance_data.json")
+DB_PATH = os.path.join(DATA_DIR, "finance.db")
 
 
 class FinanceTrackerGUI:
@@ -18,7 +18,7 @@ class FinanceTrackerGUI:
         self.root.geometry("750x600")
         self.root.minsize(650, 500)
 
-        self.tracker = PersonalFinanceTracker(storage_path=STORAGE_PATH)
+        self.tracker = PersonalFinanceTracker(db_path=DB_PATH)
 
         self._build_ui()
         self._refresh_data()

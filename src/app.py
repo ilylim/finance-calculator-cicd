@@ -3,25 +3,24 @@ from flask import Flask, flash, redirect, render_template, request, url_for, jso
 from src.finance_tracker import PersonalFinanceTracker, TransactionType
 
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
-STORAGE_PATH = os.path.join(DATA_DIR, "finance_data.json")
+DB_PATH = os.path.join(DATA_DIR, "finance.db")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "finance-tracker-secret-key-change-in-prod")
 
-tracker = PersonalFinanceTracker(storage_path=STORAGE_PATH)
+tracker = PersonalFinanceTracker(db_path=DB_PATH)
 
 
 @app.route("/")
 def index():
-    """Главная страница с обзором баланса и списком операций."""
+    """Главная страница со списком операций и сводкой."""
     summary = tracker.get_summary()
     transactions = tracker.get_transactions()
     categories_expense = [
-        "Продукты", "Транспорт", "Жилье / ЖКХ", "Кафе и рестораны",
-        "Развлечения", "Здоровье", "Одежда", "Техника", "Другое"
+        "Продукты", "Транспорт", "Жилье", "Кафе", "Развлечения", "Здоровье", "Одежда", "Другое"
     ]
     categories_income = [
-        "Зарплата", "Аванс", "Фриланс", "Премия", "Инвестиции", "Подарок", "Другое"
+        "Зарплата", "Аванс", "Фриланс", "Премия", "Инвестиции", "Другое"
     ]
     return render_template(
         "index.html",
@@ -43,30 +42,29 @@ def add_transaction():
         custom_category = request.form.get("custom_category", "").strip()
         description = request.form.get("description", "").strip()
 
-        # Если выбрана категория 'Другое' и введено кастомное название
         if category == "Другое" and custom_category:
             category = custom_category
 
         if not category:
-            flash("Укажите категорию операции!", "error")
+            flash("Укажите категорию операции.", "error")
             return redirect(url_for("index"))
 
         trans_type = TransactionType(trans_type_val)
         tracker.add_transaction(amount=amount, trans_type=trans_type, category=category, description=description)
-        flash("Операция успешно добавлена!", "success")
+        flash("Операция успешно добавлена.", "success")
     except ValueError as e:
         flash(f"Ошибка валидации: {str(e)}", "error")
     except Exception as e:
-        flash(f"Непредвиденная ошибка: {str(e)}", "error")
+        flash(f"Ошибка: {str(e)}", "error")
 
     return redirect(url_for("index"))
 
 
 @app.route("/delete/<int:trans_id>", methods=["POST"])
 def delete_transaction(trans_id: int):
-    """Удаление операции по id."""
+    """Удаление операции по идентификатору."""
     if tracker.delete_transaction(trans_id):
-        flash(f"Операция #{trans_id} успешно удалена.", "info")
+        flash(f"Операция #{trans_id} удалена.", "info")
     else:
         flash(f"Операция #{trans_id} не найдена.", "error")
     return redirect(url_for("index"))
@@ -74,7 +72,7 @@ def delete_transaction(trans_id: int):
 
 @app.route("/api/summary", methods=["GET"])
 def api_summary():
-    """API-эндпоинт для получения сводки в формате JSON."""
+    """API получения финансовой сводки."""
     return jsonify(tracker.get_summary())
 
 

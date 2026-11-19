@@ -1,18 +1,19 @@
-import json
 import os
+import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, Generator, List, Optional
 
 
 class TransactionType(str, Enum):
-    """Тип финансовой транзакции."""
+    """Тип финансовой операции."""
     INCOME = "income"
     EXPENSE = "expense"
 
 
 class Transaction:
-    """Модель отдельной финансовой операции."""
+    """Модель финансовой операции."""
 
     def __init__(
         self,
@@ -37,7 +38,6 @@ class Transaction:
         self.created_at = created_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def to_dict(self) -> dict:
-        """Сериализация в словарь."""
         return {
             "id": self.id,
             "amount": self.amount,
@@ -47,32 +47,52 @@ class Transaction:
             "created_at": self.created_at
         }
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "Transaction":
-        """Создание экземпляра из словаря."""
-        return cls(
-            trans_id=data["id"],
-            amount=data["amount"],
-            trans_type=TransactionType(data["type"]),
-            category=data["category"],
-            description=data.get("description", ""),
-            created_at=data.get("created_at")
-        )
-
 
 class PersonalFinanceTracker:
     """
-    Класс для управления личными финансами:
-    учет доходов, расходов, расчет баланса и аналитики по категориям.
+    Класс учета личных средств на базе базы данных SQLite.
+    Обеспечивает надежное хранение без потери данных между процессами и рабочими потоками.
     """
 
-    def __init__(self, storage_path: Optional[str] = None):
-        self.storage_path = storage_path
-        self._transactions: List[Transaction] = []
-        self._next_id: int = 1
+    def __init__(self, db_path: Optional[str] = None, storage_path: Optional[str] = None):
+        self.db_path = db_path or storage_path or ":memory:"
+        self._is_memory = (self.db_path == ":memory:")
+        self._mem_conn = None
 
-        if self.storage_path and os.path.exists(self.storage_path):
-            self.load_from_file(self.storage_path)
+        if self._is_memory:
+            self._mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
+            self._mem_conn.row_factory = sqlite3.Row
+        else:
+            os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
+
+        self._init_db()
+
+    @contextmanager
+    def _connection(self) -> Generator[sqlite3.Connection, None, None]:
+        if self._is_memory:
+            with self._mem_conn:
+                yield self._mem_conn
+        else:
+            conn = sqlite3.connect(self.db_path, timeout=20.0)
+            conn.row_factory = sqlite3.Row
+            try:
+                with conn:
+                    yield conn
+            finally:
+                conn.close()
+
+    def _init_db(self) -> None:
+        with self._connection() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    amount REAL NOT NULL,
+                    type TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+            """)
 
     def add_transaction(
         self,
@@ -82,116 +102,136 @@ class PersonalFinanceTracker:
         description: str = "",
         created_at: Optional[str] = None
     ) -> Transaction:
-        """Добавить новую операцию."""
-        transaction = Transaction(
-            trans_id=self._next_id,
-            amount=amount,
-            trans_type=trans_type,
-            category=category,
-            description=description,
-            created_at=created_at
+        """Добавить операцию в базу данных."""
+        if amount <= 0:
+            raise ValueError("Сумма операции должна быть строго положительным числом.")
+        if not category or not category.strip():
+            raise ValueError("Категория операции не может быть пустой.")
+
+        type_val = trans_type.value if isinstance(trans_type, TransactionType) else str(trans_type)
+        date_str = created_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cat_clean = category.strip()
+        desc_clean = description.strip() if description else ""
+        amount_round = round(float(amount), 2)
+
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO transactions (amount, type, category, description, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (amount_round, type_val, cat_clean, desc_clean, date_str)
+            )
+            trans_id = cursor.lastrowid
+
+        return Transaction(
+            trans_id=trans_id,
+            amount=amount_round,
+            trans_type=TransactionType(type_val),
+            category=cat_clean,
+            description=desc_clean,
+            created_at=date_str
         )
-        self._transactions.append(transaction)
-        self._next_id += 1
-
-        if self.storage_path:
-            self.save_to_file(self.storage_path)
-
-        return transaction
 
     def add_income(self, amount: float, category: str, description: str = "") -> Transaction:
-        """Удобный метод для добавления дохода."""
         return self.add_transaction(amount, TransactionType.INCOME, category, description)
 
     def add_expense(self, amount: float, category: str, description: str = "") -> Transaction:
-        """Удобный метод для добавления расхода."""
         return self.add_transaction(amount, TransactionType.EXPENSE, category, description)
 
     def delete_transaction(self, trans_id: int) -> bool:
         """Удалить операцию по идентификатору."""
-        initial_len = len(self._transactions)
-        self._transactions = [t for t in self._transactions if t.id != trans_id]
-        deleted = len(self._transactions) < initial_len
-
-        if deleted and self.storage_path:
-            self.save_to_file(self.storage_path)
-
-        return deleted
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM transactions WHERE id = ?", (trans_id,))
+            return cursor.rowcount > 0
 
     def get_transactions(
         self,
         trans_type: Optional[TransactionType] = None,
         category: Optional[str] = None
     ) -> List[Transaction]:
-        """Получить список операций с возможностью фильтрации."""
-        result = self._transactions
+        """Получить список всех операций с сортировкой от новых к старым."""
+        query = "SELECT id, amount, type, category, description, created_at FROM transactions WHERE 1=1"
+        params = []
+
         if trans_type:
-            result = [t for t in result if t.type == trans_type]
+            val = trans_type.value if isinstance(trans_type, TransactionType) else str(trans_type)
+            query += " AND type = ?"
+            params.append(val)
+
         if category:
-            result = [t for t in result if t.category.lower() == category.lower()]
-        return list(reversed(result))  # Сначала самые свежие
+            query += " AND lower(category) = lower(?)"
+            params.append(category)
+
+        query += " ORDER BY id DESC"
+
+        with self._connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        return [
+            Transaction(
+                trans_id=r["id"],
+                amount=r["amount"],
+                trans_type=TransactionType(r["type"]),
+                category=r["category"],
+                description=r["description"],
+                created_at=r["created_at"]
+            )
+            for r in rows
+        ]
 
     def get_total_income(self) -> float:
-        """Рассчитать общую сумму всех доходов."""
-        total = sum(t.amount for t in self._transactions if t.type == TransactionType.INCOME)
-        return round(total, 2)
+        """Сумма всех доходов."""
+        with self._connection() as conn:
+            res = conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = ?",
+                (TransactionType.INCOME.value,)
+            ).fetchone()[0]
+        return round(float(res), 2)
 
     def get_total_expenses(self) -> float:
-        """Рассчитать общую сумму всех расходов."""
-        total = sum(t.amount for t in self._transactions if t.type == TransactionType.EXPENSE)
-        return round(total, 2)
+        """Сумма всех расходов."""
+        with self._connection() as conn:
+            res = conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = ?",
+                (TransactionType.EXPENSE.value,)
+            ).fetchone()[0]
+        return round(float(res), 2)
 
     def get_balance(self) -> float:
-        """Рассчитать текущий баланс (доходы - расходы)."""
+        """Текущий баланс (доходы минус расходы)."""
         return round(self.get_total_income() - self.get_total_expenses(), 2)
 
     def get_category_breakdown(self, trans_type: TransactionType = TransactionType.EXPENSE) -> Dict[str, float]:
-        """Сводка сумм по категориям (для расходов или доходов)."""
-        breakdown: Dict[str, float] = {}
-        for t in self._transactions:
-            if t.type == trans_type:
-                breakdown[t.category] = round(breakdown.get(t.category, 0.0) + t.amount, 2)
-        return breakdown
+        """Сводка сумм по категориям."""
+        val = trans_type.value if isinstance(trans_type, TransactionType) else str(trans_type)
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT category, ROUND(SUM(amount), 2) as total
+                FROM transactions
+                WHERE type = ?
+                GROUP BY category
+                ORDER BY total DESC
+                """,
+                (val,)
+            ).fetchall()
+        return {r["category"]: float(r["total"]) for r in rows}
 
     def get_summary(self) -> dict:
-        """Полная сводка по счету."""
+        """Общая сводка состояния счета."""
         return {
             "total_income": self.get_total_income(),
             "total_expenses": self.get_total_expenses(),
             "balance": self.get_balance(),
-            "transactions_count": len(self._transactions),
+            "transactions_count": len(self.get_transactions()),
             "expenses_by_category": self.get_category_breakdown(TransactionType.EXPENSE),
             "income_by_category": self.get_category_breakdown(TransactionType.INCOME)
         }
 
     def clear(self) -> None:
         """Очистить все записи."""
-        self._transactions.clear()
-        self._next_id = 1
-        if self.storage_path and os.path.exists(self.storage_path):
-            self.save_to_file(self.storage_path)
-
-    def save_to_file(self, filepath: str) -> None:
-        """Сохранить состояние в JSON-файл."""
-        directory = os.path.dirname(filepath)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory, exist_ok=True)
-
-        payload = {
-            "next_id": self._next_id,
-            "transactions": [t.to_dict() for t in self._transactions]
-        }
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-
-    def load_from_file(self, filepath: str) -> None:
-        """Загрузить операции из JSON-файла."""
-        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
-            return
-
-        with open(filepath, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-
-        self._next_id = payload.get("next_id", 1)
-        raw_items = payload.get("transactions", [])
-        self._transactions = [Transaction.from_dict(item) for item in raw_items]
+        with self._connection() as conn:
+            conn.execute("DELETE FROM transactions")

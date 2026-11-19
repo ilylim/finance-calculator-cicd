@@ -9,7 +9,7 @@ WorkingDirectory=/home/ubuntu/pr3
 Environment="PATH=/home/ubuntu/pr3/venv/bin"
 Environment="PORT=5000"
 Environment="DATA_DIR=/home/ubuntu/pr3/data"
-ExecStart=/home/ubuntu/pr3/venv/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 2 src.app:app
+ExecStart=/home/ubuntu/pr3/venv/bin/gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 src.app:app
 Restart=always
 RestartSec=3
 

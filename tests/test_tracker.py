@@ -105,29 +105,28 @@ class TestPersonalFinanceTracker:
         assert len(salary) == 1
         assert salary[0].amount == 5000
 
-    def test_json_persistence(self):
-        """Проверка сохранения в файл и загрузки из файла."""
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
-            tmp_path = tmp.name
+    def test_db_persistence(self):
+        """Проверка сохранения в базу данных и чтения между экземплярами."""
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
 
         try:
-            tracker1 = PersonalFinanceTracker(storage_path=tmp_path)
+            tracker1 = PersonalFinanceTracker(db_path=tmp_path)
             tracker1.add_income(12000, "Зарплата", "Аванс")
             tracker1.add_expense(3500, "ЖКХ", "Свет и вода")
 
-            # Создаем новый трекер, указывая на тот же файл
-            tracker2 = PersonalFinanceTracker(storage_path=tmp_path)
+            # Создаем второй трекер, указывая на тот же файл БД
+            tracker2 = PersonalFinanceTracker(db_path=tmp_path)
             assert len(tracker2.get_transactions()) == 2
             assert tracker2.get_balance() == 8500.0
-            assert tracker2._next_id == 3
 
             # Добавляем третью операцию во втором трекере
             tracker2.add_expense(500, "Интернет")
-            assert tracker2._next_id == 4
 
-            # Проверяем перезагрузку первого трекера
-            tracker1.load_from_file(tmp_path)
+            # Первый трекер сразу же видит изменения из БД
             assert tracker1.get_balance() == 8000.0
+            assert len(tracker1.get_transactions()) == 3
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)

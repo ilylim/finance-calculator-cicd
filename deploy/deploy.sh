@@ -36,7 +36,7 @@ else
     sleep 1
 
     # Запускаем Gunicorn
-    nohup gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 2 src.app:app > gunicorn.log 2>&1 &
+    nohup gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 src.app:app > gunicorn.log 2>&1 &
 fi
 
 echo "Деплой скрипта завершен успешно!"

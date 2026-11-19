@@ -28,20 +28,20 @@ def main():
     subparsers.add_parser("list", help="Показать список операций")
 
     args = parser.parse_args()
-    tracker = PersonalFinanceTracker(storage_path="data/finance_data.json")
+    tracker = PersonalFinanceTracker(db_path="data/finance.db")
 
     if args.command == "income":
         t = tracker.add_income(args.amount, args.category, args.desc)
-        print(f"✅ Доход успешно добавлен: +{t.amount:.2f} ₽ ({t.category})")
+        print(f"Доход успешно добавлен: +{t.amount:.2f} руб. ({t.category})")
     elif args.command == "expense":
         t = tracker.add_expense(args.amount, args.category, args.desc)
-        print(f"✅ Расход успешно добавлен: -{t.amount:.2f} ₽ ({t.category})")
+        print(f"Расход успешно добавлен: -{t.amount:.2f} руб. ({t.category})")
     elif args.command == "summary":
         s = tracker.get_summary()
         print("\n--- Финансовая сводка ---")
-        print(f"Доходы:  +{s['total_income']:.2f} ₽")
-        print(f"Расходы: -{s['total_expenses']:.2f} ₽")
-        print(f"Баланс:   {s['balance']:.2f} ₽")
+        print(f"Доходы:  +{s['total_income']:.2f} руб.")
+        print(f"Расходы: -{s['total_expenses']:.2f} руб.")
+        print(f"Баланс:   {s['balance']:.2f} руб.")
         print("------------------------\n")
     elif args.command == "list":
         txs = tracker.get_transactions()
@@ -51,7 +51,7 @@ def main():
         print(f"\nВсего операций: {len(txs)}")
         for t in txs:
             sign = "+" if t.type == TransactionType.INCOME else "-"
-            print(f"[{t.id}] {t.created_at} | {sign}{t.amount:.2f} ₽ | {t.category} | {t.description}")
+            print(f"[{t.id}] {t.created_at} | {sign}{t.amount:.2f} руб. | {t.category} | {t.description}")
     else:
         parser.print_help()
 
