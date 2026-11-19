@@ -25,7 +25,7 @@ def test_index_page_empty(client):
     """Главная страница возвращает 200 OK при пустой базе."""
     response = client.get("/")
     assert response.status_code == 200
-    assert "Калькулятор личных средств".encode("utf-8") in response.data
+    assert "Учет личных финансов".encode("utf-8") in response.data
 
 
 def test_add_income_via_form(client):
